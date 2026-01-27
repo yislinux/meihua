@@ -115,7 +115,7 @@ with st.sidebar:
         api_key = st.text_input("DeepSeek API Key", type="password")
         base_url = st.text_input("API Base URL", value="https://api.deepseek.com")
     
-    model_name = st.selectbox("选择模型", ["deepseek-chat", "deepseek-reasoner"], index=0)
+    model_name = st.selectbox("选择模型", ["DeepSeek-R1", "deepseek-reasoner"], index=0)
     st.markdown("---")
     st.info("💡 说明：\n1. 输入两个数字起卦。\n2. 系统自动推算体用五行。\n3. AI 大师进行详细解卦。")
 
