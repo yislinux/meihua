@@ -115,7 +115,14 @@ with st.sidebar:
         api_key = st.text_input("DeepSeek API Key", type="password")
         base_url = st.text_input("API Base URL", value="https://api.deepseek.com")
     
-    model_name = st.selectbox("选择模型", ["DeepSeek-R1", "deepseek-reasoner"], index=0)
+    # 注意：DeepSeek 的 API 模型名称通常是 deepseek-chat 或 deepseek-reasoner
+    # DeepSeek-R1 可能只是显示名称，实际调用建议用 deepseek-reasoner
+    model_name = st.selectbox(
+        "选择模型", 
+        ["deepseek-chat", "deepseek-reasoner"], 
+        index=0,
+        help="deepseek-chat (V3) 速度快; deepseek-reasoner (R1) 擅长推理"
+    )
     st.markdown("---")
     st.info("💡 说明：\n1. 输入两个数字起卦。\n2. 系统自动推算体用五行。\n3. AI 大师进行详细解卦。")
 
@@ -245,6 +252,7 @@ if start_divination:
     try:
         client = OpenAI(api_key=api_key, base_url=base_url)
         
+        # 发起请求
         stream = client.chat.completions.create(
             model=model_name,
             messages=[
@@ -254,32 +262,24 @@ if start_divination:
             stream=True
         )
         
-        # --- 修复后的流式输出循环 ---
+        # --- 【修复重点】流式处理循环 ---
         for chunk in stream:
-            # 1. 先判断 choices 是否存在且不为空
+            # 1. 安全检查：如果 choices 为空列表（通常是流结束或 Usage 包），直接跳过
             if not chunk.choices:
                 continue
-            
+
             # 2. 获取 delta 对象
             delta = chunk.choices[0].delta
             
-            # 3. 兼容 DeepSeek R1 的推理模型（防止 content 为 None 报错）
-            # 注意：R1 模型会先输出 reasoning_content，再输出 content
-            # 如果你只想看结果，忽略 reasoning_content 即可；如果想看思考过程，需额外处理
-            
-            content = delta.content
-            
-            # 4. 只有当 content 有实际内容时才拼接
-            if content:
-                full_response += content
+            # 3. 检查 content 是否存在（防止 NoneType 报错）
+            if delta.content:
+                full_response += delta.content
                 res_box.markdown(full_response + "▌")
         
-        # 循环结束后，显示最终结果（去掉光标）
+        # 循环结束，显示最终结果
         res_box.markdown(full_response)
         
     except Exception as e:
-        # 打印详细错误堆栈，方便调试
-        import traceback
-        st.error(f"AI 请求失败: {str(e)}")
-        # 可以在这里打印出 chunk 以便调试，如果是在本地运行的话
-        # print(traceback.format_exc())
+        # 捕捉所有异常并显示
+        st.error(f"❌ AI 请求发生错误: {str(e)}")
+        st.warning("请检查 API Key 是否正确，或模型名称是否支持。")
