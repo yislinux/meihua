@@ -254,14 +254,32 @@ if start_divination:
             stream=True
         )
         
-        # 流式输出
+        # --- 修复后的流式输出循环 ---
         for chunk in stream:
-            content = chunk.choices[0].delta.content
+            # 1. 先判断 choices 是否存在且不为空
+            if not chunk.choices:
+                continue
+            
+            # 2. 获取 delta 对象
+            delta = chunk.choices[0].delta
+            
+            # 3. 兼容 DeepSeek R1 的推理模型（防止 content 为 None 报错）
+            # 注意：R1 模型会先输出 reasoning_content，再输出 content
+            # 如果你只想看结果，忽略 reasoning_content 即可；如果想看思考过程，需额外处理
+            
+            content = delta.content
+            
+            # 4. 只有当 content 有实际内容时才拼接
             if content:
                 full_response += content
                 res_box.markdown(full_response + "▌")
         
+        # 循环结束后，显示最终结果（去掉光标）
         res_box.markdown(full_response)
         
     except Exception as e:
+        # 打印详细错误堆栈，方便调试
+        import traceback
         st.error(f"AI 请求失败: {str(e)}")
+        # 可以在这里打印出 chunk 以便调试，如果是在本地运行的话
+        # print(traceback.format_exc())
