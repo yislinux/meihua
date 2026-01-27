@@ -119,7 +119,7 @@ with st.sidebar:
     # DeepSeek-R1 可能只是显示名称，实际调用建议用 deepseek-reasoner
     model_name = st.selectbox(
         "选择模型", 
-        ["deepseek-chat", "deepseek-reasoner"], 
+        ["deepseek-R1", "deepseek-reasoner"], 
         index=0,
         help="deepseek-chat (V3) 速度快; deepseek-reasoner (R1) 擅长推理"
     )
