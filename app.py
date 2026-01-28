@@ -1,6 +1,7 @@
 import streamlit as st
 from openai import OpenAI
 from lunar_python import Solar
+import datetime # 导入 datetime 以进行日期校验
 
 # ================= 1. 页面配置 =================
 st.set_page_config(
@@ -139,12 +140,18 @@ with st.sidebar:
         api_key = st.text_input("DeepSeek API Key", type="password")
         base_url = st.text_input("API Base URL", value="https://api.deepseek.com")
 
-    model_name = st.selectbox(
+    # [FIX] 增加模型 ID 映射，确保调用正确的 API 模型名称
+    model_mapping = {
+        "DeepSeek-R1 (推理模型)": "deepseek-reasoner",
+        "DeepSeek-V3 (通用模型)": "deepseek-chat"
+    }
+    model_display = st.selectbox(
         "选择模型",
-        ["deepseek-R1", "deepseek-chat"],
+        list(model_mapping.keys()),
         index=0,
         help="推荐使用 reasoner 模型以获得更强的逻辑推理能力"
     )
+    model_name = model_mapping[model_display]
 
     st.markdown("---")
     st.info("💡 **说明**：\n本系统结合了数字起卦（触机）、八字命理（时间）与地理方位（空间），提供三维一体的AI解读。")
@@ -194,20 +201,18 @@ with st.expander("点击展开/折叠 个人详细信息设置", expanded=True):
     user_solar_str = ""
     is_date_valid = True
 
-    # 简单的日期有效性检查 (比如防止 2月30日)
+    # 简单的日期有效性检查
     try:
-        # 尝试构建一个 datetime 对象来验证日期是否存在
-        import datetime
         temp_date = datetime.date(sel_year, sel_month, sel_day)
     except ValueError:
         is_date_valid = False
         st.error(f"日期错误：{sel_year}年{sel_month}月 没有 {sel_day}日")
 
-    if is_date_valid and t:
+    if is_date_valid and t is not None:
         user_bazi, user_solar_str = calculate_bazi(sel_year, sel_month, sel_day, t.hour, t.minute)
         st.success(f" 八字排盘：**{user_bazi}**")
         st.caption(f"公历时间：{user_solar_str}")
-    elif not t:
+    elif t is None:
         st.info("请补充出生时间以生成八字")
 
 # --- 按钮区域 ---
@@ -299,7 +304,8 @@ if start_divination:
 
     # ================= AI 解读 =================
     bazi_prompt_part = ""
-    if d and t:
+    # [FIX] 这里原本是 if d and t: 但 d 未定义。修复为使用校验标志和时间对象。
+    if is_date_valid and t is not None:
         bazi_prompt_part = f"""
 【命主八字信息】：
 - 出生时间：{user_solar_str} (公历)
@@ -347,7 +353,7 @@ if start_divination:
     try:
         client = OpenAI(api_key=api_key, base_url=base_url)
         stream = client.chat.completions.create(
-            model=model_name,
+            model=model_name, # 使用已修正的模型名称
             messages=[
                 {"role": "system", "content": "你是一位精通梅花易数与八字命理的国学大师。"},
                 {"role": "user", "content": prompt}
