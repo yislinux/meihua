@@ -166,32 +166,49 @@ question = st.text_input("🔮 占卜事项", placeholder="例如：近期换工
 # --- 第二部分：个人信息 (带格式修正) ---
 st.subheader("2. 命主信息 (八字与空间)")
 with st.expander("点击展开/折叠 个人详细信息设置", expanded=True):
-    col_date, col_time = st.columns(2)
-    with col_date:
-        # 修正：format="YYYY-MM-DD" 强制显示为数字格式
-        d = st.date_input(
-            "出生日期 (公历)", 
-            value=None, 
-            min_value=None, 
-            max_value=None,
-            format="YYYY-MM-DD", 
-            help="请选择公历出生日期"
-        )
-    with col_time:
-        t = st.time_input("出生时间", value=None, help="请选择出生时间（24小时制）")
+    # 使用 3列布局选择 年、月、日
+    col_y, col_m, col_d = st.columns([1, 1, 1])
+    
+    with col_y:
+        # 年份：从 1940 到 2025，默认选 1990
+        year_list = list(range(1940, 2026))
+        sel_year = st.selectbox("出生年", year_list, index=year_list.index(1990))
         
-    birth_place = st.text_input("📍 出生地点", placeholder="例如：北京市朝阳区", help="用于结合地理五行分析")
+    with col_m:
+        # 月份：1-12
+        sel_month = st.selectbox("出生月", list(range(1, 13)))
+        
+    with col_d:
+        # 日期：1-31 (简单处理，具体有效性在计算时校验)
+        sel_day = st.selectbox("出生日", list(range(1, 32)))
+
+    # 时间与地点
+    col_t, col_p = st.columns([1, 2])
+    with col_t:
+        t = st.time_input("出生时间", value=None, help="请选择出生时间（24小时制）")
+    with col_p:
+        birth_place = st.text_input(" 出生地点", placeholder="例如：北京市朝阳区", help="用于结合地理五行分析")
     
     # 实时计算八字预览
-    user_bazi = "未完整填写日期时间"
+    user_bazi = "等待填写时间..."
     user_solar_str = ""
-    
-    if d and t:
-        user_bazi, user_solar_str = calculate_bazi(d.year, d.month, d.day, t.hour, t.minute)
-        st.success(f"📅 八字排盘：**{user_bazi}**")
+    is_date_valid = True
+
+    # 简单的日期有效性检查 (比如防止 2月30日)
+    try:
+        # 尝试构建一个 datetime 对象来验证日期是否存在
+        import datetime
+        temp_date = datetime.date(sel_year, sel_month, sel_day)
+    except ValueError:
+        is_date_valid = False
+        st.error(f"日期错误：{sel_year}年{sel_month}月 没有 {sel_day}日")
+
+    if is_date_valid and t:
+        user_bazi, user_solar_str = calculate_bazi(sel_year, sel_month, sel_day, t.hour, t.minute)
+        st.success(f" 八字排盘：**{user_bazi}**")
         st.caption(f"公历时间：{user_solar_str}")
-    elif d or t:
-        st.info("请补全日期和时间以生成完整八字")
+    elif not t:
+        st.info("请补充出生时间以生成八字")
 
 # --- 按钮区域 ---
 start_divination = st.button("🚀 开始全息排盘与解卦", use_container_width=True)
