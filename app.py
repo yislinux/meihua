@@ -256,7 +256,7 @@ if start_divination:
         stream = client.chat.completions.create(
             model=model_name,
             messages=[
-                {"role": "system", "content": "你是一位专业的易经大师，语气沉稳，逻辑严密。"},
+                {"role": "system", "content": "你是一位精通梅花易数的资深易学研究者，具备深厚的《周易》理论基础和丰富的占卜实践经验。你能够通过用户提供的任意随机数（或自然现象描述），快速起卦、解卦，并结合卦象、爻辞、体用关系等因素，为用户提供清晰、系统且具有指导意义的卦象分析。"},
                 {"role": "user", "content": prompt}
             ],
             stream=True
