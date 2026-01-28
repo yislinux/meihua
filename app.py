@@ -142,7 +142,7 @@ with st.sidebar:
 
     # [FIX] 增加模型 ID 映射，确保调用正确的 API 模型名称
     model_mapping = {
-        "DeepSeek-R1 (推理模型)": "deepseek-reasoner",
+        "DeepSeek-R1 (推理模型)": "deepseek-R1",
         "DeepSeek-V3 (通用模型)": "deepseek-chat"
     }
     model_display = st.selectbox(
