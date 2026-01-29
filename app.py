@@ -1,7 +1,7 @@
 import streamlit as st
 from openai import OpenAI
 from lunar_python import Solar
-import datetime # 导入 datetime 以进行日期校验
+import datetime
 
 # ================= 1. 页面配置 =================
 st.set_page_config(
@@ -109,22 +109,34 @@ def get_api_client():
 def calculate_bazi(year, month, day, hour, minute):
     """根据公历计算八字，并返回格式化字符串"""
     try:
+        # 建立阳历对象
         solar = Solar.fromYmdHms(year, month, day, hour, minute, 0)
+        # 转阴历
         lunar = solar.getLunar()
         
+        # 获取干支
         gan_zhi_year = lunar.getYearInGanZhi()
         gan_zhi_month = lunar.getMonthInGanZhi()
         gan_zhi_day = lunar.getDayInGanZhi()
         gan_zhi_time = lunar.getTimeInGanZhi()
         
         ba_zi_str = f"{gan_zhi_year}年 {gan_zhi_month}月 {gan_zhi_day}日 {gan_zhi_time}时"
+        
+        # 格式化公历显示为纯数字: YYYY-MM-DD HH:mm
         solar_str = f"{year:04d}-{month:02d}-{day:02d} {hour:02d}:{minute:02d}"
         
         return ba_zi_str, solar_str
     except Exception as e:
         return f"计算出错: {str(e)}", ""
 
-# [NEW] 新增：计算时间起卦的四个数值 (年、月、日、时)
+def get_beijing_time():
+    """获取当前北京时间 (UTC+8)"""
+    # 获取 UTC 时间
+    utc_now = datetime.datetime.utcnow()
+    # 加 8 小时
+    beijing_now = utc_now + datetime.timedelta(hours=8)
+    return beijing_now
+
 def get_time_gua_numbers(date_obj, time_obj):
     """
     根据公历时间返回梅花易数时间起卦所需的数值：
@@ -164,6 +176,7 @@ with st.sidebar:
         api_key = st.text_input("DeepSeek API Key", type="password")
         base_url = st.text_input("API Base URL", value="https://api.deepseek.com")
 
+    # 模型选择
     model_mapping = {
         "DeepSeek-R1 (推理模型)": "deepseek-R1",
         "DeepSeek-V3 (通用模型)": "deepseek-chat"
@@ -177,27 +190,29 @@ with st.sidebar:
     model_name = model_mapping[model_display]
 
     st.markdown("---")
-    st.info("💡 **说明**：\n本系统结合了时间、空间、触机与八字命理，提供全息AI解读。")
+    st.info("💡 **说明**：\n本系统结合了数字起卦（触机）、八字命理（时间）与地理方位（空间），提供三维一体的AI解读。")
 
 # ================= 6. 主界面逻辑 =================
 st.title("☯️ AI 全息梅花易数")
 st.caption("命理(八字) + 地理(方位) + 卦理(梅花) 三才合一排盘")
 
-# --- 第一部分：起卦选择 [NEW] ---
+# --- 第一部分：起卦方式选择 ---
 st.subheader("1. 起卦设定")
 
-# [NEW] 增加起卦方式的选择
 qigua_method = st.radio(
     "选择起卦法：",
     ["🔢 数字起卦 (触机灵动)", "🕒 时间起卦 (顺应天时)"],
     horizontal=True
 )
 
-# [NEW] 初始化变量，防止后续报错
+# 初始化变量
 num1, num2 = 3, 8 
-div_date, div_time = datetime.date.today(), datetime.datetime.now().time()
+# 获取当前北京时间
+current_bj_time = get_beijing_time()
+div_date = current_bj_time.date()
+div_time = current_bj_time.time()
 
-# [NEW] 根据选择渲染不同的输入组件
+# 根据选择显示不同的输入框
 if "数字起卦" in qigua_method:
     col_num1, col_num2 = st.columns(2)
     with col_num1:
@@ -207,37 +222,46 @@ if "数字起卦" in qigua_method:
 else:
     col_d, col_t = st.columns(2)
     with col_d:
-        div_date = st.date_input("占卜日期", datetime.date.today())
+        # 默认值使用当前北京时间
+        div_date = st.date_input("占卜日期", value=current_bj_time.date())
     with col_t:
-        div_time = st.time_input("占卜时间", datetime.datetime.now().time(), help="系统会自动将时间转化为干支时辰")
+        # step=60 去掉秒的显示，保持界面整洁
+        div_time = st.time_input("占卜时间", value=current_bj_time.time(), step=60, help="默认为当前北京时间")
 
 question = st.text_input("🔮 占卜事项", placeholder="例如：近期换工作去北京发展是否顺利？")
 
-# --- 第二部分：个人信息 ---
+# --- 第二部分：命主信息 ---
 st.subheader("2. 命主信息 (八字与空间)")
 with st.expander("点击展开/折叠 个人详细信息设置", expanded=True):
-    col_y, col_m, col_d_sel = st.columns([1, 1, 1])
+    # 使用 3列布局选择 年、月、日
+    col_y, col_m, col_d = st.columns([1, 1, 1])
     
     with col_y:
+        # 年份：从 1940 到 2025，默认选 1990
         year_list = list(range(1940, 2026))
         sel_year = st.selectbox("出生年", year_list, index=year_list.index(1990))
         
     with col_m:
+        # 月份：1-12
         sel_month = st.selectbox("出生月", list(range(1, 13)))
         
-    with col_d_sel:
+    with col_d:
+        # 日期：1-31
         sel_day = st.selectbox("出生日", list(range(1, 32)))
 
-    col_t_sel, col_p = st.columns([1, 2])
-    with col_t_sel:
+    # 时间与地点
+    col_t, col_p = st.columns([1, 2])
+    with col_t:
         t = st.time_input("出生时间", value=None, help="请选择出生时间（24小时制）")
     with col_p:
-        birth_place = st.text_input(" 出生地点", placeholder="例如：北京市朝阳区")
+        birth_place = st.text_input(" 出生地点", placeholder="例如：北京市朝阳区", help="用于结合地理五行分析")
     
+    # 实时计算八字预览
     user_bazi = "等待填写时间..."
     user_solar_str = ""
     is_date_valid = True
 
+    # 简单的日期有效性检查
     try:
         temp_date = datetime.date(sel_year, sel_month, sel_day)
     except ValueError:
@@ -262,24 +286,33 @@ if start_divination:
         st.warning("请填写占卜事项。")
         st.stop()
 
-    # ================= 排盘逻辑计算 [MODIFIED] =================
-    qigua_info = "" # 用于展示起卦的具体参数
+    # ================= 排盘逻辑计算 =================
+    qigua_info = "" 
     
     if "数字起卦" in qigua_method:
+        # 数字起卦算法
         shang_num = num1 % 8 or 8
         xia_num = num2 % 8 or 8
         total_sum = num1 + num2
         dong_yao = total_sum % 6 or 6
         qigua_info = f"【数字起卦】上数：{num1}，下数：{num2}"
     else:
-        # [NEW] 时间起卦逻辑：年+月+日=上卦，年+月+日+时=下卦/动爻
+        # 时间起卦算法
+        # 1. 获取农历参数
         y_n, m_n, d_n, h_n, lunar_str = get_time_gua_numbers(div_date, div_time)
-        sum_shang = y_n + m_n + d_n
-        sum_xia = y_n + m_n + d_n + h_n
         
+        # 2. 梅花易数时间起卦公式
+        # 上卦 = (年+月+日) / 8
+        sum_shang = y_n + m_n + d_n
         shang_num = sum_shang % 8 or 8
+        
+        # 下卦 = (年+月+日+时) / 8
+        sum_xia = y_n + m_n + d_n + h_n
         xia_num = sum_xia % 8 or 8
+        
+        # 动爻 = (年+月+日+时) / 6
         dong_yao = sum_xia % 6 or 6
+        
         qigua_info = f"【时间起卦】{lunar_str} (年{y_n}+月{m_n}+日{d_n}=上卦{shang_num}，加时{h_n}=下卦{xia_num}/动爻{dong_yao})"
 
     # 本卦
@@ -341,7 +374,7 @@ if start_divination:
         for i in range(5, -1, -1):
             st.markdown(draw_yao_html(bian_yao_list[i] == 1, i == idx), unsafe_allow_html=True)
 
-    # 详细文字信息 [MODIFIED] 添加了起卦信息展示
+    # 详细文字信息
     st.markdown(f"""
     <div class='info-box'>
         <b>📋 起卦信息：</b>{qigua_info}<br><br>
@@ -416,9 +449,9 @@ if start_divination:
             if not chunk.choices: continue
             delta = chunk.choices[0].delta
             
-            # 处理 reasoning_content
+            # 兼容 reasoning_content (如果使用 deepseek-reasoner)
             if hasattr(delta, 'reasoning_content') and delta.reasoning_content:
-                pass
+                pass 
             
             if delta.content:
                 full_response += delta.content
