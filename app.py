@@ -109,25 +109,49 @@ def get_api_client():
 def calculate_bazi(year, month, day, hour, minute):
     """根据公历计算八字，并返回格式化字符串"""
     try:
-        # 建立阳历对象
         solar = Solar.fromYmdHms(year, month, day, hour, minute, 0)
-        # 转阴历
         lunar = solar.getLunar()
         
-        # 获取干支
         gan_zhi_year = lunar.getYearInGanZhi()
         gan_zhi_month = lunar.getMonthInGanZhi()
         gan_zhi_day = lunar.getDayInGanZhi()
         gan_zhi_time = lunar.getTimeInGanZhi()
         
         ba_zi_str = f"{gan_zhi_year}年 {gan_zhi_month}月 {gan_zhi_day}日 {gan_zhi_time}时"
-        
-        # 格式化公历显示为纯数字: YYYY-MM-DD HH:mm
         solar_str = f"{year:04d}-{month:02d}-{day:02d} {hour:02d}:{minute:02d}"
         
         return ba_zi_str, solar_str
     except Exception as e:
         return f"计算出错: {str(e)}", ""
+
+# [NEW] 新增：计算时间起卦的四个数值 (年、月、日、时)
+def get_time_gua_numbers(date_obj, time_obj):
+    """
+    根据公历时间返回梅花易数时间起卦所需的数值：
+    年数(地支)、月数(农历)、日数(农历)、时数(地支)
+    """
+    solar = Solar.fromYmdHms(date_obj.year, date_obj.month, date_obj.day, time_obj.hour, time_obj.minute, 0)
+    lunar = solar.getLunar()
+    
+    # 1. 年数 (子1, 丑2... 亥12)
+    dz_list = ["子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥"]
+    year_dz = lunar.getYearZhi()
+    year_num = dz_list.index(year_dz) + 1
+    
+    # 2. 月数 (农历月份，闰月取绝对值)
+    month_num = abs(lunar.getMonth())
+    
+    # 3. 日数 (农历日期)
+    day_num = lunar.getDay()
+    
+    # 4. 时数 (子1, 丑2... 亥12)
+    time_dz = lunar.getTimeZhi()
+    hour_num = dz_list.index(time_dz) + 1
+    
+    # 返回四者和阴历详细信息（用于展示）
+    lunar_info = f"农历：{lunar.getYearInGanZhi()}年 {lunar.getMonthInChinese()}月 {lunar.getDayInChinese()} {lunar.getTimeInGanZhi()}时"
+    
+    return year_num, month_num, day_num, hour_num, lunar_info
 
 # ================= 5. 侧边栏设置 =================
 with st.sidebar:
@@ -140,7 +164,6 @@ with st.sidebar:
         api_key = st.text_input("DeepSeek API Key", type="password")
         base_url = st.text_input("API Base URL", value="https://api.deepseek.com")
 
-    # [FIX] 增加模型 ID 映射，确保调用正确的 API 模型名称
     model_mapping = {
         "DeepSeek-R1 (推理模型)": "deepseek-R1",
         "DeepSeek-V3 (通用模型)": "deepseek-chat"
@@ -154,54 +177,67 @@ with st.sidebar:
     model_name = model_mapping[model_display]
 
     st.markdown("---")
-    st.info("💡 **说明**：\n本系统结合了数字起卦（触机）、八字命理（时间）与地理方位（空间），提供三维一体的AI解读。")
+    st.info("💡 **说明**：\n本系统结合了时间、空间、触机与八字命理，提供全息AI解读。")
 
 # ================= 6. 主界面逻辑 =================
 st.title("☯️ AI 全息梅花易数")
 st.caption("命理(八字) + 地理(方位) + 卦理(梅花) 三才合一排盘")
 
-# --- 第一部分：起卦数字 ---
-st.subheader("1. 触机起卦 (输入数字)")
-col_num1, col_num2 = st.columns(2)
-with col_num1:
-    num1 = st.number_input("上卦数 (天)", min_value=1, value=3, step=1, help="心中想到的第一个数字")
-with col_num2:
-    num2 = st.number_input("下卦数 (地)", min_value=1, value=8, step=1, help="心中想到的第二个数字")
+# --- 第一部分：起卦选择 [NEW] ---
+st.subheader("1. 起卦设定")
+
+# [NEW] 增加起卦方式的选择
+qigua_method = st.radio(
+    "选择起卦法：",
+    ["🔢 数字起卦 (触机灵动)", "🕒 时间起卦 (顺应天时)"],
+    horizontal=True
+)
+
+# [NEW] 初始化变量，防止后续报错
+num1, num2 = 3, 8 
+div_date, div_time = datetime.date.today(), datetime.datetime.now().time()
+
+# [NEW] 根据选择渲染不同的输入组件
+if "数字起卦" in qigua_method:
+    col_num1, col_num2 = st.columns(2)
+    with col_num1:
+        num1 = st.number_input("上卦数 (天)", min_value=1, value=3, step=1, help="心中想到的第一个数字")
+    with col_num2:
+        num2 = st.number_input("下卦数 (地)", min_value=1, value=8, step=1, help="心中想到的第二个数字")
+else:
+    col_d, col_t = st.columns(2)
+    with col_d:
+        div_date = st.date_input("占卜日期", datetime.date.today())
+    with col_t:
+        div_time = st.time_input("占卜时间", datetime.datetime.now().time(), help="系统会自动将时间转化为干支时辰")
 
 question = st.text_input("🔮 占卜事项", placeholder="例如：近期换工作去北京发展是否顺利？")
 
-# --- 第二部分：个人信息 (带格式修正) ---
+# --- 第二部分：个人信息 ---
 st.subheader("2. 命主信息 (八字与空间)")
 with st.expander("点击展开/折叠 个人详细信息设置", expanded=True):
-    # 使用 3列布局选择 年、月、日
-    col_y, col_m, col_d = st.columns([1, 1, 1])
+    col_y, col_m, col_d_sel = st.columns([1, 1, 1])
     
     with col_y:
-        # 年份：从 1940 到 2025，默认选 1990
         year_list = list(range(1940, 2026))
         sel_year = st.selectbox("出生年", year_list, index=year_list.index(1990))
         
     with col_m:
-        # 月份：1-12
         sel_month = st.selectbox("出生月", list(range(1, 13)))
         
-    with col_d:
-        # 日期：1-31 (简单处理，具体有效性在计算时校验)
+    with col_d_sel:
         sel_day = st.selectbox("出生日", list(range(1, 32)))
 
-    # 时间与地点
-    col_t, col_p = st.columns([1, 2])
-    with col_t:
+    col_t_sel, col_p = st.columns([1, 2])
+    with col_t_sel:
         t = st.time_input("出生时间", value=None, help="请选择出生时间（24小时制）")
     with col_p:
-        birth_place = st.text_input(" 出生地点", placeholder="例如：北京市朝阳区", help="用于结合地理五行分析")
+        birth_place = st.text_input(" 出生地点", placeholder="例如：北京市朝阳区")
     
-    # 实时计算八字预览
     user_bazi = "等待填写时间..."
     user_solar_str = ""
     is_date_valid = True
 
-    # 简单的日期有效性检查
     try:
         temp_date = datetime.date(sel_year, sel_month, sel_day)
     except ValueError:
@@ -226,11 +262,25 @@ if start_divination:
         st.warning("请填写占卜事项。")
         st.stop()
 
-    # ================= 排盘逻辑计算 =================
-    shang_num = num1 % 8 or 8
-    xia_num = num2 % 8 or 8
-    total_sum = num1 + num2
-    dong_yao = total_sum % 6 or 6
+    # ================= 排盘逻辑计算 [MODIFIED] =================
+    qigua_info = "" # 用于展示起卦的具体参数
+    
+    if "数字起卦" in qigua_method:
+        shang_num = num1 % 8 or 8
+        xia_num = num2 % 8 or 8
+        total_sum = num1 + num2
+        dong_yao = total_sum % 6 or 6
+        qigua_info = f"【数字起卦】上数：{num1}，下数：{num2}"
+    else:
+        # [NEW] 时间起卦逻辑：年+月+日=上卦，年+月+日+时=下卦/动爻
+        y_n, m_n, d_n, h_n, lunar_str = get_time_gua_numbers(div_date, div_time)
+        sum_shang = y_n + m_n + d_n
+        sum_xia = y_n + m_n + d_n + h_n
+        
+        shang_num = sum_shang % 8 or 8
+        xia_num = sum_xia % 8 or 8
+        dong_yao = sum_xia % 6 or 6
+        qigua_info = f"【时间起卦】{lunar_str} (年{y_n}+月{m_n}+日{d_n}=上卦{shang_num}，加时{h_n}=下卦{xia_num}/动爻{dong_yao})"
 
     # 本卦
     ben_shang = GUA_DATA[shang_num]
@@ -291,9 +341,10 @@ if start_divination:
         for i in range(5, -1, -1):
             st.markdown(draw_yao_html(bian_yao_list[i] == 1, i == idx), unsafe_allow_html=True)
 
-    # 详细文字信息
+    # 详细文字信息 [MODIFIED] 添加了起卦信息展示
     st.markdown(f"""
     <div class='info-box'>
+        <b>📋 起卦信息：</b>{qigua_info}<br><br>
         <b>🎯 核心关系：</b><br>
         • 体卦 (自己/主体)：<b>{ti_gua['name']} ({ti_gua['wx']})</b><br>
         • 用卦 (对方/环境)：<b>{yong_gua['name']} ({yong_gua['wx']})</b><br>
@@ -304,7 +355,6 @@ if start_divination:
 
     # ================= AI 解读 =================
     bazi_prompt_part = ""
-    # [FIX] 这里原本是 if d and t: 但 d 未定义。修复为使用校验标志和时间对象。
     if is_date_valid and t is not None:
         bazi_prompt_part = f"""
 【命主八字信息】：
@@ -324,6 +374,7 @@ if start_divination:
 {bazi_prompt_part}
 
 【卦象数据】：
+- 起卦方式：{qigua_info}
 1. **本卦** (现状)：上{ben_shang['name']}({ben_shang['wx']}) 下{ben_xia['name']}({ben_xia['wx']})
 2. **互卦** (过程)：上{hu_shang['name']}({hu_shang['wx']}) 下{hu_xia['name']}({hu_xia['wx']})
 3. **变卦** (结果)：上{bian_shang['name']}({bian_shang['wx']}) 下{bian_xia['name']}({bian_xia['wx']})
@@ -353,7 +404,7 @@ if start_divination:
     try:
         client = OpenAI(api_key=api_key, base_url=base_url)
         stream = client.chat.completions.create(
-            model=model_name, # 使用已修正的模型名称
+            model=model_name,
             messages=[
                 {"role": "system", "content": "你是一位精通梅花易数与八字命理的国学大师。"},
                 {"role": "user", "content": prompt}
@@ -365,9 +416,8 @@ if start_divination:
             if not chunk.choices: continue
             delta = chunk.choices[0].delta
             
-            # 处理 reasoning_content (如果使用 deepseek-reasoner)
+            # 处理 reasoning_content
             if hasattr(delta, 'reasoning_content') and delta.reasoning_content:
-                # 这里可以选择是否显示思维链，暂时忽略以保持界面整洁
                 pass
             
             if delta.content:
