@@ -149,10 +149,6 @@ with st.sidebar:
     
     api_key, base_url = get_api_client()
 
-    if not api_key:
-        st.warning("⚠️ 请配置阿里云 DashScope API Key")
-        api_key = st.text_input("DashScope API Key", type="password")
-
     # Qwen 模型选择
     model_mapping = {
         "Qwen Plus (推荐, 均衡且强大)": "qwen3.5-plus",
