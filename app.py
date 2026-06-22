@@ -151,7 +151,7 @@ with st.sidebar:
 
     # Qwen 模型选择
     model_mapping = {
-        "Qwen Plus (推荐, 均衡且强大)": "qwen3.5-plus",
+        "Qwen Plus (推荐, 均衡且强大)": "qwen3.6-plus-2026-04-02",
         "Qwen Max (最强推理能力)": "qwen-max",
         "Qwen Turbo (极速响应)": "qwen-turbo"
     }
