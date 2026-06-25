@@ -438,33 +438,51 @@ if start_divination:
 现在，请严格遵循以上全部流程、规则、格式展开完整推演，输出标准化最终裁决。
 """
 
-    st.markdown("<br>### 开始解卦", unsafe_allow_html=True)
+
+# 1. 界面初始化与提示
+    st.markdown("<br>### 🔮 开始解卦", unsafe_allow_html=True)
     res_box = st.empty()
     full_response = ""
-
+    
     try:
-        # 使用兼容 OpenAI 格式的调用方式
+        # 2. 初始化 OpenAI 兼容客户端
         client = OpenAI(api_key=api_key, base_url=base_url)
-        with st.spinner("解卦中..."):
+        
+        with st.spinner("🧘‍♂️ 宗师正在推演命局与卦象..."):
+            # 3. 发起流式请求，开启思考模式并调低温度
             stream = client.chat.completions.create(
                 model=model_name,
                 messages=[
-                    {"role": "system", "content": "你是通义千问驱动的易学宗师。你的回答需要专业、神秘但极其具有实用指导意义。"},
+                    {"role": "system", "content": "你是顶级易学宗师。请严格遵循用户提示词中的所有推演步骤、逻辑规则与输出格式，绝对不可违背语言红线。"},
                     {"role": "user", "content": prompt}
                 ],
                 stream=True,
-                temperature=0.7,
-                top_p=0.8
+                temperature=0.2,      # 核心修改：降低温度，确保逻辑严密和格式稳定
+                top_p=0.8,
+                # 核心修改：通过 extra_body 开启 Qwen 的深度思考模式
+                extra_body={
+                    'enable_thinking': True,
+                    'thinking_budget': 8192  # 限制思考长度，防止Token消耗过大
+                }
             )
-
+    
+            # 4. 处理流式响应
             for chunk in stream:
-                if chunk.choices and chunk.choices[0].delta.content:
-                    full_response += chunk.choices[0].delta.content
-                    res_box.info(full_response + " ▌", icon="✨")
-
-            # 最终渲染去掉光标
-            res_box.info(full_response, icon="✨")
-
+                if chunk.choices:
+                    delta = chunk.choices[0].delta
+                    
+                    # 捕获并拼接最终的回复内容（过滤掉后台的思考过程，保持界面整洁）
+                    if hasattr(delta, 'content') and delta.content:
+                        full_response += delta.content
+                        # 实时渲染，带光标效果
+                        res_box.info(full_response + " ▌", icon="✨")
+    
+            # 5. 最终渲染：去掉光标，显示完整结果
+            if full_response:
+                res_box.info(full_response, icon="✨")
+            else:
+                res_box.warning("未获取到有效回复，请检查输入或重试。")
+    
     except Exception as e:
-        st.error(f"API 请求发生错误: {e}")
-        st.caption("提示：请检查 DashScope API Key 是否有效，账户是否开通了对应的 Qwen 模型权限。")
+        st.error(f"❌ API 请求发生错误: {e}")
+        st.caption("💡 提示：请检查 DashScope API Key 是否有效，账户是否开通了对应的 Qwen 模型权限，以及网络是否正常。")
