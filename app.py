@@ -121,9 +121,75 @@ def calculate_bazi(year, month, day, hour, minute):
         lunar = solar.getLunar()
         ba_zi_str = f"{lunar.getYearInGanZhi()}年 {lunar.getMonthInGanZhi()}月 {lunar.getDayInGanZhi()}日 {lunar.getTimeInGanZhi()}时"
         solar_str = f"{year:04d}-{month:02d}-{day:02d} {hour:02d}:{minute:02d}"
-        return ba_zi_str, solar_str
+        return ba_zi_str, solar_str, solar  # 返回 solar 对象以便后续提取更多信息
     except Exception as e:
-        return f"计算出错: {str(e)}", ""
+        return f"计算出错: {str(e)}", "", None
+
+# ================= 新增：提取详细八字数据 =================
+def get_bazi_detail(solar):
+    """
+    从 Solar 对象中提取更丰富的命理信息
+    返回字典：日主、日主五行、十神、月令五行、大运干支、流年干支、桃花、天乙贵人等
+    """
+    lunar = solar.getLunar()
+    ba_zi = lunar.getBaZi()
+
+    # 日主天干及五行
+    day_zhu = ba_zi.getDayZhu()          # 如 "甲"
+    day_wuxing = ba_zi.getDayWuXing()    # 如 "木"
+
+    # 十神分布（年干、月干、日支、时干的十神）
+    shi_shen_list = ba_zi.getShiShen()   # 返回列表，如 ['比肩', '食神', '正财', '七杀']
+    shi_shen_str = "年干{}、月干{}、日支{}、时干{}".format(*shi_shen_list)
+
+    # 月令（月支）五行 —— 用于辅助判断身强身弱
+    month_zhu = ba_zi.getMonthZhu()       # 如 "丙寅"
+    month_zhi = month_zhu[-1]             # 地支
+    # 地支五行映射
+    di_zhi_wuxing = {
+        '子': '水', '丑': '土', '寅': '木', '卯': '木',
+        '辰': '土', '巳': '火', '午': '火', '未': '土',
+        '申': '金', '酉': '金', '戌': '土', '亥': '水'
+    }
+    month_wuxing = di_zhi_wuxing.get(month_zhi, '未知')
+
+    # 大运（基于当前系统时间）
+    da_yun_list = lunar.getDaYun()  # 返回 DaYun 对象列表
+    now = datetime.datetime.now()
+    current_year = now.year
+    current_da_yun = None
+    for dy in da_yun_list:
+        if dy.getStartYear() <= current_year <= dy.getEndYear():
+            current_da_yun = dy
+            break
+    if current_da_yun:
+        da_yun_ganzhi = current_da_yun.getGanZhi()
+        da_yun_nayin = current_da_yun.getNaYin()
+    else:
+        da_yun_ganzhi = "未知"
+        da_yun_nayin = "未知"
+
+    # 流年（当前年份的农历年干支）
+    solar_now = Solar.fromDate(now)
+    lunar_now = solar_now.getLunar()
+    liu_nian_ganzhi = lunar_now.getYearInGanZhi()
+
+    # 神煞（提取桃花、天乙贵人）
+    shen_sha = ba_zi.getShenSha()       # 字典，如 {'桃花': '午', '天乙贵人': '酉'}
+    tao_hua = shen_sha.get('桃花', '无')
+    tian_yi = shen_sha.get('天乙贵人', '无')
+
+    return {
+        "day_zhu": day_zhu,
+        "day_wuxing": day_wuxing,
+        "shi_shen_str": shi_shen_str,
+        "month_wuxing": month_wuxing,
+        "da_yun_ganzhi": da_yun_ganzhi,
+        "da_yun_nayin": da_yun_nayin,
+        "liu_nian_ganzhi": liu_nian_ganzhi,
+        "tao_hua": tao_hua,
+        "tian_yi": tian_yi,
+    }
 
 def get_beijing_time():
     utc_now = datetime.datetime.utcnow()
@@ -213,7 +279,7 @@ with tab2:
     with col_t:
         t = st.time_input("出生时间", value=None)
     with col_p:
-        birth_place = st.text_input(" 出生地点", placeholder="例如：北京市朝阳区")
+        birth_place = st.text_input("📍 出生地点", placeholder="例如：北京市朝阳区")
     
     user_bazi = "未提供完整时间"
     user_solar_str = ""
@@ -226,7 +292,7 @@ with tab2:
         st.error("⚠️ 日期错误：不存在该日期。")
 
     if is_date_valid and t is not None:
-        user_bazi, user_solar_str = calculate_bazi(sel_year, sel_month, sel_day, t.hour, t.minute)
+        user_bazi, user_solar_str, solar_bazi_obj = calculate_bazi(sel_year, sel_month, sel_day, t.hour, t.minute)
         st.success(f"📜 命主八字：**{user_bazi}**")
 
 # --- 按钮区域 ---
@@ -307,18 +373,39 @@ if start_divination:
     </div>
     """, unsafe_allow_html=True)
 
-    # ================= AI 解读 =================
-    bazi_prompt_part = f"""
-【命主八字参数】：
-- 公历时间：{user_solar_str}
+    # ================= 构建命主信息（增强版） =================
+    # 原代码中 user_bazi, user_solar_str 已在 tab2 中赋值（若有效）
+    # 但我们需要传递 solar_bazi_obj 给 get_bazi_detail，所以需要保存该对象
+    # 我们在 tab2 中已经计算过 solar_bazi_obj，但它是局部变量，这里需要重新获取
+    # 最简单：在此处重新计算一次，因为变量已经存在
+    if is_date_valid and t is not None:
+        # 重新获取 solar 对象
+        solar_bazi = Solar.fromYmdHms(sel_year, sel_month, sel_day, t.hour, t.minute, 0)
+        detail = get_bazi_detail(solar_bazi)
+        bazi_prompt_part = f"""
+【命主先天命局 · 本地硬数据】（以下数据由历法库直接计算，无需 AI 重新推算）
+- 公历出生时间：{user_solar_str}
 - 八字排盘：{user_bazi}
-- 出生地点：{birth_place if birth_place else "未提供"} 
-- 校验指令：请判断日主强弱及喜用神。如果“体卦”五行是八字的喜用神，则吉上加吉；若是忌神，则吉处藏凶。
-""" if is_date_valid and t is not None else "【命主信息】：用户未提供详细生辰，请仅根据梅花易数卦象法则进行推演。"
+- 日主天干：{detail['day_zhu']}（五行属 {detail['day_wuxing']}）
+- 月令五行：{detail['month_wuxing']}（月令对日主影响重大）
+- 十神分布：{detail['shi_shen_str']}
+- 当前大运：{detail['da_yun_ganzhi']}（纳音 {detail['da_yun_nayin']}）
+- 流年干支：{detail['liu_nian_ganzhi']}
+- 桃花位：{detail['tao_hua']}  天乙贵人：{detail['tian_yi']}
+- 出生地点：{birth_place if birth_place else "未提供"}
 
+【命理校验指令】：
+1. 请根据以上硬数据，先自行判断日主强弱（可结合月令、得地、得势）。
+2. 推演出喜用神与忌神。
+3. 在后续“命卦合参”时，若体卦五行与喜用神一致，则断为“天命加持，吉上加吉”；若体卦五行与忌神一致，则纵使卦象生体，亦需警惕“虚花之象”。
+"""
+    else:
+        bazi_prompt_part = "【命主信息】：用户未提供详细生辰，请仅根据梅花易数卦象法则进行推演。"
+
+    # ================= AI 解读 =================
     prompt = f"""
 # Role: 顶级易学宗师 · 命卦合参实战顾问
-你精通《梅花易数》体用生克与《子平真诠》格局喜忌，且深谙爻辞外应。你的核心价值是**破虚象、断实机**，所有断语必须指向用户具体问题（{question}），严禁泛泛而谈。
+你精通《子平真诠》格局喜忌与《梅花易数》体用生克，且深谙爻辞外应。你的核心价值是**“以命为体，以卦为用，破虚象、断实机”**。所有断语必须指向用户具体问题（{question}），严禁泛泛而谈。
 
 # Context (用户背景与问题)
 - **用户所求**：{question}
@@ -336,7 +423,19 @@ if start_divination:
 
 # ️ 强制推演四步法（必须按顺序执行，不可跳跃）
 
-### 第一步：体用生克定“卦象吉凶”（基调）
+### 第一步：八字原局深度拆解（基于本地硬数据）
+用户若提供了八字（即 bazi_prompt_part 包含硬数据），请直接引用其中的十神、大运、流年等，无需重新计算天干地支。
+1. **定格局与日主**：根据日主五行、月令、十神组合，判定身强/身弱（可参考月令和得地得势）。
+2. **取用神与忌神**：基于身强身弱，明确扶抑、调候、通关用神。
+3. **原局象法提取**：
+   - **性格底色**：十神组合（如杀印相生、食神制杀）反映的核心性格与行事作风。
+   - **六亲缘分**：财官印食在四柱的分布，点出原生家庭、婚姻宫、子女宫的先天状态。
+   - **财富/事业天赋**：财星是否有根，食伤是否生财；官杀与印星的配合，判断适合体制内、经商、技术还是自由职业。
+4. **先天隐患/短板**：点出原局中最严重的冲克或五行缺失（如“财多身弱”、“婚姻宫逢冲”）。
+
+若未提供八字，则声明“八字信息不全，仅依梅花卦象独断”，跳过此步，后续输出不得虚构八字数据。
+
+### 第二步：体用生克定“卦象吉凶”（后天契机）
 严格按以下规则判定初始吉凶，并解释生克如何映射到 {question} 的具体场景：
 - **用生体** → 大吉（外力主动助我，事倍功半）。
 - **体克用** → 小吉（我能驾驭此事，但需主动付出心力）。
@@ -351,26 +450,17 @@ if start_divination:
 2. 多爻同动：舍弃单爻爻辞细断，仅以本、互、变全局生克作为核心判定依据；
 3. 静卦无动爻：代表局面凝滞、事情拖延难推进，吉凶以本卦格局长期恒定为准。
 
-### 第二步：命卦合参校验“能量增益”（八字修正）
-若用户提供了八字（即 `bazi_prompt_part` 含八字排盘）：
-1. 先依据八字明确：**日主强弱**、**喜神/用神（最喜五行）**、**忌神（最忌五行）**。
-2. 将 **体卦五行** 与八字的 **喜用/忌神** 对比：
-   - 体卦五行 = 喜神或用神 → 断为 **【天命加持】**（在原卦象吉凶基础上，提升一个等级，如“小吉”升为“大吉”）。
-   - 体卦五行 = 忌神 → 断为 **【吉中藏咎】**（即使卦象为“用生体”大吉，也要警示“外部机遇暗耗命主根基，得利但伤身”）。
-   - 体卦五行与喜忌无关（闲神）→ 断为 **【平助】**（不影响卦象等级，仅应期上略有延迟）。
-
-#### 补充命局深层校验规则
-1. 日主承载力修正：若体卦为喜神，但日主身弱，仅小幅提升运势，不可断万事顺遂，必须标注“机遇有利但自身精力不足，切勿贪多冒进”；
-2. 全局制衡校验：若互卦、变卦五行属于命局强忌神，即便体卦为喜神，也要追加内在隐患警示；
-3. 若内容包含大运、流年信息，需叠加大运流年五行二次修正卦象等级；无大运流年则仅论原局八字。
+### 第三步：命卦合参校验“能量增益”（先天与后天的碰撞）
+将“卦象”作为“流年/流月/流日”的引子，与“八字原局”进行碰撞：
+1. **卦象补命**：若体卦五行为命局喜用神，断为“后天机缘补足先天短板，天命加持”（在原卦象吉凶基础上提升一个等级）。
+2. **卦象破命**：若变卦/互卦五行冲克命局用神，断为“先天根基受损，即便卦象表面吉利，亦需防暗礁”（断为【吉中藏咎】，警示外部机遇暗耗命主根基）。
+3. **大运流年叠加**：若内容包含大运、流年信息，需叠加大运流年五行二次修正卦象等级；无大运流年则仅论原局八字。
 
 #### 等级升降硬性边界
 变卦终局判定为大凶格局时，无论体卦是否为喜神，最多只能降低一级凶性，禁止直接逆转成吉。
 
-若未提供八字，则声明“八字信息不全，仅依梅花卦象独断”，跳过此步，后续输出不得虚构八字、日主、喜忌相关内容。
-
-### 第三步：八卦万物类象 · 具象映射（必须扣住“用户问题”）
-#### 取象场景分支强制区分，优先匹配提问诉求
+### 第四步：八卦万物类象 · 具象映射与应期推断
+#### 1. 取象场景分支强制区分，优先匹配提问诉求
 - 问事业求职：重点取官贵、文书、单位、领导、考核、平台类象；
 - 问财运合伙：重点取资金、客户、合作人、交易、库房、合同类象；
 - 问感情姻缘：重点取男女、婚恋媒介、长辈、家庭、约会场所类象；
@@ -383,45 +473,41 @@ if start_divination:
 - **坎（水）**：流动钱财、暗流、隐藏风险、欺诈、中年男性、黑色、酒水、隐私是非。
 - **艮/坤（土）**：房产、土地、后勤、长辈、脾胃、黄色、稳定仓储、阻碍阻滞。
 
-结合体用卦的所属五行，直接描绘出当前局面下**关键人物的性格特征**、**所处环境的具体方位**以及**资金/物质的流动方向**，次要类象一笔带过，不冗余堆砌。
-
-### 第四步：应期推断（结合动爻与节气，强制分级标准）
-1. 基础单位硬性划分，AI不可自主随意变更：
-- 短期琐事（当日/三日内：面试、寻人、单次洽谈、急事）：动爻数字1~6对应1~6日；
-- 中期事项（月度项目、合作、年内求财）：动爻数字1~6对应1~6周；
-- 长期规划（事业流年、置业、婚嫁、跨年大事）：动爻数字1~6对应1~6月；
-2. 旺衰修正规则：卦逢旺相应期提前三分之一，卦逢休囚死绝应期延后一倍；
-3. 四季卦气时间窗口：震巽木主春（正月、二月），离火主夏（四月、五月），乾兑金主秋（七月、八月），坎水主冬（十月、十一月），艮坤土主四季末；
-4. 凶局补充约束：若变卦判定为大凶，输出同时标注有利时间窗口与绝对避忌时间，不可只写吉期；
+#### 2. 应期推断（结合动爻与节气，强制分级标准）
+- 短期琐事（当日/三日内）：动爻数字1~6对应1~6日；
+- 中期事项（月度项目、合作）：动爻数字1~6对应1~6周；
+- 长期规划（事业流年、置业）：动爻数字1~6对应1~6月；
+- 旺衰修正：卦逢旺相应期提前三分之一，卦逢休囚死绝应期延后一倍。
 最终输出必须给出精确时间区间+对应五行吉日，禁止宽泛模糊描述。
-
-# 兜底特殊卦局处理规则（四步法执行完毕后统一校验）
-1. 静卦无动爻：单独标注核心提示“此事凝滞不动，不宜主动推进，宜守不宜攻，静待外力转机”；
-2. 多爻多动：断语核心以变卦终局为准，本卦仅代表表面初始表象；
-3. 用户同时提出多类复合诉求（事业+财运+感情等）：分维度独立推演吉凶、类象、应期与对策，不可混为一谈；
-4. 体用比和，但互卦、变卦双重克体：判定为表面和顺、内里持续损耗，原大吉等级下调为中平。
 
 ---
 
 #  输出格式（严格按此 Markdown 结构，不得合并或删减模块）
 
-##  断卦总诀
-（一句话定性，必须同时包含“卦象吉凶等级”和“命卦合参后的修正结论”，例如：**“卦得用生体，大吉；且体卦属火为命局喜神，天命加持，此事必成，唯防变卦坎水暗动，需速战速决。”**）
+##  命卦总诀
+（一句话定性，必须同时包含“先天命局特征”与“当下卦象吉凶”。例：“命局杀印相生主贵，今得用生体之大吉卦，天命加持，事业必迎重大突破。”）
 
-##  卦局分说
-- **本卦（当下形势）**：...
+##  先天命局总览（若缺八字则输出“信息不全，略”）
+- **格局与用神**：（简述日主强弱、格局名称及核心喜忌神）
+- **性格与天赋**：（点出命主的核心优势与致命弱点）
+- **人生核心赛道**：（基于原局，指出最适合的财富与事业方向）
+- **先天隐患/短板**：（点出原局中最严重的冲克或五行缺失）
+
+##  当下卦象推演
+- **本卦（当下契机）**：...
 - **互卦（过程隐情）**：...
 - **变卦（最终结局）**：...
-- **动爻点睛**：（解读该爻的爻辞意象或阴阳变化带来的关键转折点，静卦则标注无动爻、局面停滞）
+- **动爻点睛**：（解读该爻的爻辞意象或阴阳变化带来的关键转折点）
+- **命卦合参**：（重点论述当下的卦象是如何作用于先天命局的，是补是破？）
 
 ##  类象与应期
 - **关键人/物/方象**：（例：相助之人属长男、穿黑衣，来自北方；忌与属鸡者同谋）
 - **应期指向**：（例：农历五月午火当令，或本月7日之前，酉日切勿行动）
 
-##  锦囊三策（必须具体到行为，不可写“心态要稳”这类空话）
-1. 【急策】：（针对未来3天的具体操作，如“今日申时向正西步行百步，并暂停回复无关业务邮件”）
-2. 【中策】：（针对未来一周的策略布局、人际取舍、事务调整）
-3. 【缓策】：（针对长期大方向的避坑、蓄力、资源布局建议）
+##  宗师锦囊（必须具体到行为，不可写“心态要稳”这类空话）
+1. 【顺势而为】：（结合命局用神与卦象吉方，指出当前最该做的事）
+2. 【趋吉避凶】：（结合命局忌神与卦象凶象，指出绝对不可碰的红线）
+3. 【长远布局】：（针对先天命局的短板，给出后天五行、行业、人际的补救建议）
 
 ## ️ 避坑指南
 （单独点出全局最危险的行为、时间、方位、人际组合，例如：“最忌酉日往东南方谈判，否则用卦兑金克体，前期努力前功尽弃”）
@@ -438,18 +524,14 @@ if start_divination:
 现在，请严格遵循以上全部流程、规则、格式展开完整推演，输出标准化最终裁决。
 """
 
-
-# 1. 界面初始化与提示
+    # 调用 API 流式输出
     st.markdown("<br>### 🔮 开始解卦", unsafe_allow_html=True)
     res_box = st.empty()
     full_response = ""
     
     try:
-        # 2. 初始化 OpenAI 兼容客户端
         client = OpenAI(api_key=api_key, base_url=base_url)
-        
         with st.spinner("🧘‍♂️ 宗师正在推演命局与卦象..."):
-            # 3. 发起流式请求，开启思考模式并调低温度
             stream = client.chat.completions.create(
                 model=model_name,
                 messages=[
@@ -457,32 +539,23 @@ if start_divination:
                     {"role": "user", "content": prompt}
                 ],
                 stream=True,
-                temperature=0.2,      # 核心修改：降低温度，确保逻辑严密和格式稳定
+                temperature=0.2,
                 top_p=0.8,
-                # 核心修改：通过 extra_body 开启 Qwen 的深度思考模式
                 extra_body={
                     'enable_thinking': True,
-                    'thinking_budget': 8192  # 限制思考长度，防止Token消耗过大
+                    'thinking_budget': 8192
                 }
             )
-    
-            # 4. 处理流式响应
             for chunk in stream:
                 if chunk.choices:
                     delta = chunk.choices[0].delta
-                    
-                    # 捕获并拼接最终的回复内容（过滤掉后台的思考过程，保持界面整洁）
                     if hasattr(delta, 'content') and delta.content:
                         full_response += delta.content
-                        # 实时渲染，带光标效果
                         res_box.info(full_response + " ▌", icon="✨")
-    
-            # 5. 最终渲染：去掉光标，显示完整结果
             if full_response:
                 res_box.info(full_response, icon="✨")
             else:
                 res_box.warning("未获取到有效回复，请检查输入或重试。")
-    
     except Exception as e:
         st.error(f"❌ API 请求发生错误: {e}")
         st.caption("💡 提示：请检查 DashScope API Key 是否有效，账户是否开通了对应的 Qwen 模型权限，以及网络是否正常。")
