@@ -16,7 +16,7 @@ st.markdown("""
 <style>
     /* 全局背景色微调 */
     .stApp { background-color: #faf9f6; }
-    
+
     /* 卦爻容器 */
     .yao-container {
         display: flex;
@@ -90,6 +90,7 @@ GUA_DATA = {
     8: {"name": "坤", "wx": "土", "binary": [0, 0, 0]},
 }
 
+
 # ================= 4. 核心工具函数 =================
 
 def get_gua_id_by_binary(bits):
@@ -98,6 +99,7 @@ def get_gua_id_by_binary(bits):
             return gid
     return 8
 
+
 def draw_yao_html(is_yang, is_moving=False):
     moving_class = "moving-yao" if is_moving else ""
     if is_yang:
@@ -105,15 +107,17 @@ def draw_yao_html(is_yang, is_moving=False):
     else:
         return f"<div class='yao-container {moving_class}'><div class='yin-yao'><div class='yin-block'></div><div class='yin-block'></div></div></div>"
 
+
 def get_api_client():
     """获取阿里云百炼 (DashScope) API配置"""
     api_key = None
     # 阿里云 DashScope 的兼容 OpenAI 接口地址
     base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    
+
     if "DASHSCOPE_API_KEY" in st.secrets:
         api_key = st.secrets["DASHSCOPE_API_KEY"]
     return api_key, base_url
+
 
 def calculate_bazi(year, month, day, hour, minute):
     try:
@@ -124,6 +128,7 @@ def calculate_bazi(year, month, day, hour, minute):
         return ba_zi_str, solar_str, solar  # 返回 solar 对象以便后续提取更多信息
     except Exception as e:
         return f"计算出错: {str(e)}", "", None
+
 
 # ================= 新增：提取详细八字数据 =================
 def get_bazi_detail(solar):
@@ -139,7 +144,7 @@ def get_bazi_detail(solar):
         ba_zi = lunar.getBaZi()
 
         # ---------- 日主天干和五行 ----------
-        day_ganzhi = lunar.getDayInGanZhi()          # 如 "甲子"
+        day_ganzhi = lunar.getDayInGanZhi()  # 如 "甲子"
         day_zhu = day_ganzhi[0] if day_ganzhi and len(day_ganzhi) >= 1 else "未知"
         tian_gan_wuxing = {
             "甲": "木", "乙": "木", "丙": "火", "丁": "火",
@@ -150,7 +155,7 @@ def get_bazi_detail(solar):
 
         # ---------- 十神 ----------
         try:
-            shi_shen_list = ba_zi.getShiShen()   # 某些版本可能存在此方法
+            shi_shen_list = ba_zi.getShiShen()  # 某些版本可能存在此方法
         except AttributeError:
             shi_shen_list = []
         # 确保至少有4个元素
@@ -220,28 +225,31 @@ def get_bazi_detail(solar):
             "liu_nian_ganzhi": "未知", "tao_hua": "未知", "tian_yi": "未知"
         }
 
+
 def get_beijing_time():
     utc_now = datetime.datetime.utcnow()
     return utc_now + datetime.timedelta(hours=8)
 
+
 def get_time_gua_numbers(date_obj, time_obj):
     solar = Solar.fromYmdHms(date_obj.year, date_obj.month, date_obj.day, time_obj.hour, time_obj.minute, 0)
     lunar = solar.getLunar()
-    
+
     dz_list = ["子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥"]
     year_num = dz_list.index(lunar.getYearZhi()) + 1
     month_num = abs(lunar.getMonth())
     day_num = lunar.getDay()
     hour_num = dz_list.index(lunar.getTimeZhi()) + 1
-    
+
     lunar_info = f"农历：{lunar.getYearInGanZhi()}年 {lunar.getMonthInChinese()}月 {lunar.getDayInChinese()} {lunar.getTimeInGanZhi()}时"
     return year_num, month_num, day_num, hour_num, lunar_info
 
+
 # ================= 5. 侧边栏设置 =================
 with st.sidebar:
-    st.image("https://img.alicdn.com/tfs/TB1_ZXuNXXXXXatapXXXXXXXXXX-1024-1024.png", width=60) # 示意Icon
+    st.image("https://img.alicdn.com/tfs/TB1_ZXuNXXXXXatapXXXXXXXXXX-1024-1024.png", width=60)  # 示意Icon
     st.title("⚙️ 模型设置")
-    
+
     api_key, base_url = get_api_client()
 
     # Qwen 模型选择
@@ -262,10 +270,12 @@ with st.sidebar:
 
 # ================= 6. 主界面逻辑 =================
 st.title("☯️ 全息梅花易数")
-st.markdown("<p style='color:#7f8c8d; font-size:1.1em;'>命理(八字) × 地理(方位) × 卦理(梅花) 三才合一排盘引擎</p>", unsafe_allow_html=True)
+st.markdown("<p style='color:#7f8c8d; font-size:1.1em;'>命理(八字) × 地理(方位) × 卦理(梅花) 三才合一排盘引擎</p>",
+            unsafe_allow_html=True)
 
 # 突出核心输入框
-question = st.text_input("🔮 您心中所问何事？", placeholder="例如：近期换工作去北京发展是否顺利？请务必清晰描述...", help="心诚则灵，请具体描述所测之事")
+question = st.text_input("🔮 您心中所问何事？", placeholder="例如：近期换工作去北京发展是否顺利？请务必清晰描述...",
+                         help="心诚则灵，请具体描述所测之事")
 
 # 使用 Tabs 优化界面层级
 tab1, tab2 = st.tabs(["🔢 起卦设定 (必填)", "👤 命主信息 (提供可提高准确度)"])
@@ -277,7 +287,7 @@ num1, num2 = 3, 8
 
 with tab1:
     qigua_method = st.radio("选择起卦法：", ["🔢 数字起卦 (触机灵动)", "🕒 时间起卦 (顺应天时)"], horizontal=True)
-    
+
     if "数字起卦" in qigua_method:
         st.caption("请静心默念问题，凭第一直觉输入两个1-999的数字：")
         col_num1, col_num2 = st.columns(2)
@@ -309,7 +319,7 @@ with tab2:
         t = st.time_input("出生时间", value=None)
     with col_p:
         birth_place = st.text_input("📍 出生地点", placeholder="例如：北京市朝阳区")
-    
+
     user_bazi = "未提供完整时间"
     user_solar_str = ""
     is_date_valid = True
@@ -321,7 +331,7 @@ with tab2:
         st.error("⚠️ 日期错误：不存在该日期。")
 
     if is_date_valid and t is not None:
-    user_bazi, user_solar_str, solar_bazi_obj = calculate_bazi(sel_year, sel_month, sel_day, t.hour, t.minute)
+        user_bazi, user_solar_str, solar_bazi_obj = calculate_bazi(sel_year, sel_month, sel_day, t.hour, t.minute)
     st.success(f"📜 命主八字：**{user_bazi}**")
     # 缓存
     st.session_state['solar_bazi'] = solar_bazi_obj
@@ -329,12 +339,11 @@ with tab2:
     st.session_state['user_solar_str'] = user_solar_str
     st.session_state['birth_place'] = birth_place
 else:
-    # 清除缓存
-    st.session_state.pop('solar_bazi', None)
-    st.session_state.pop('user_bazi', None)
-    st.session_state.pop('user_solar_str', None)
-    st.session_state.pop('birth_place', None)
-        
+# 清除缓存
+st.session_state.pop('solar_bazi', None)
+st.session_state.pop('user_bazi', None)
+st.session_state.pop('user_solar_str', None)
+st.session_state.pop('birth_place', None)
 
 # --- 按钮区域 ---
 st.markdown("<br>", unsafe_allow_html=True)
@@ -349,8 +358,8 @@ if start_divination:
         st.stop()
 
     # ================= 排盘逻辑计算 =================
-    qigua_info = "" 
-    
+    qigua_info = ""
+
     if "数字起卦" in qigua_method:
         shang_num = num1 % 8 or 8
         xia_num = num2 % 8 or 8
@@ -394,16 +403,23 @@ if start_divination:
 
     g1, g2, g3, g4 = st.columns([2, 2, 0.5, 2])
     with g1:
-        st.markdown(f"<div class='gua-title'>本卦<br><span style='font-size:0.7em;color:#7f8c8d'>{ben_shang['name']}{ben_xia['name']}</span></div>", unsafe_allow_html=True)
+        st.markdown(
+            f"<div class='gua-title'>本卦<br><span style='font-size:0.7em;color:#7f8c8d'>{ben_shang['name']}{ben_xia['name']}</span></div>",
+            unsafe_allow_html=True)
         for i in range(5, -1, -1): st.markdown(draw_yao_html(ben_yao_list[i] == 1, i == idx), unsafe_allow_html=True)
     with g2:
-        st.markdown(f"<div class='gua-title'>互卦<br><span style='font-size:0.7em;color:#7f8c8d'>{hu_shang['name']}{hu_xia['name']}</span></div>", unsafe_allow_html=True)
+        st.markdown(
+            f"<div class='gua-title'>互卦<br><span style='font-size:0.7em;color:#7f8c8d'>{hu_shang['name']}{hu_xia['name']}</span></div>",
+            unsafe_allow_html=True)
         hu_full = hu_xia["binary"] + hu_shang["binary"]
         for i in range(5, -1, -1): st.markdown(draw_yao_html(hu_full[i] == 1, False), unsafe_allow_html=True)
     with g3:
-        st.markdown("<div style='text-align:center;font-size:2.5em;padding-top:40px;color:#bdc3c7;'>➜</div>", unsafe_allow_html=True)
+        st.markdown("<div style='text-align:center;font-size:2.5em;padding-top:40px;color:#bdc3c7;'>➜</div>",
+                    unsafe_allow_html=True)
     with g4:
-        st.markdown(f"<div class='gua-title'>变卦<br><span style='font-size:0.7em;color:#7f8c8d'>{bian_shang['name']}{bian_xia['name']}</span></div>", unsafe_allow_html=True)
+        st.markdown(
+            f"<div class='gua-title'>变卦<br><span style='font-size:0.7em;color:#7f8c8d'>{bian_shang['name']}{bian_xia['name']}</span></div>",
+            unsafe_allow_html=True)
         for i in range(5, -1, -1): st.markdown(draw_yao_html(bian_yao_list[i] == 1, i == idx), unsafe_allow_html=True)
 
     st.markdown(f"""
@@ -570,14 +586,15 @@ else:
     st.markdown("<br>### 🔮 开始解卦", unsafe_allow_html=True)
     res_box = st.empty()
     full_response = ""
-    
+
     try:
         client = OpenAI(api_key=api_key, base_url=base_url)
         with st.spinner("🧘‍♂️ 宗师正在推演命局与卦象..."):
             stream = client.chat.completions.create(
                 model=model_name,
                 messages=[
-                    {"role": "system", "content": "你是顶级易学宗师。请严格遵循用户提示词中的所有推演步骤、逻辑规则与输出格式，绝对不可违背语言红线。"},
+                    {"role": "system",
+                     "content": "你是顶级易学宗师。请严格遵循用户提示词中的所有推演步骤、逻辑规则与输出格式，绝对不可违背语言红线。"},
                     {"role": "user", "content": prompt}
                 ],
                 stream=True,
