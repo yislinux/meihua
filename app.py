@@ -127,69 +127,98 @@ def calculate_bazi(year, month, day, hour, minute):
 
 # ================= 新增：提取详细八字数据 =================
 def get_bazi_detail(solar):
-    """
-    从 Solar 对象中提取更丰富的命理信息
-    返回字典：日主、日主五行、十神、月令五行、大运干支、流年干支、桃花、天乙贵人等
-    """
-    lunar = solar.getLunar()
-    ba_zi = lunar.getBaZi()
+    """从 Solar 对象中提取命理信息，兼容不同版本的 lunar-python"""
+    if solar is None:
+        return {
+            "day_zhu": "未知", "day_wuxing": "未知", "shi_shen_str": "未知",
+            "month_wuxing": "未知", "da_yun_ganzhi": "未知", "da_yun_nayin": "未知",
+            "liu_nian_ganzhi": "未知", "tao_hua": "未知", "tian_yi": "未知"
+        }
+    try:
+        lunar = solar.getLunar()
+        ba_zi = lunar.getBaZi()
 
-    # 日主天干及五行
-    day_zhu = ba_zi.getDayZhu()          # 如 "甲"
-    day_wuxing = ba_zi.getDayWuXing()    # 如 "木"
+        # ---------- 日主天干和五行 ----------
+        day_ganzhi = lunar.getDayInGanZhi()          # 如 "甲子"
+        day_zhu = day_ganzhi[0] if day_ganzhi and len(day_ganzhi) >= 1 else "未知"
+        tian_gan_wuxing = {
+            "甲": "木", "乙": "木", "丙": "火", "丁": "火",
+            "戊": "土", "己": "土", "庚": "金", "辛": "金",
+            "壬": "水", "癸": "水"
+        }
+        day_wuxing = tian_gan_wuxing.get(day_zhu, "未知")
 
-    # 十神分布（年干、月干、日支、时干的十神）
-    shi_shen_list = ba_zi.getShiShen()   # 返回列表，如 ['比肩', '食神', '正财', '七杀']
-    shi_shen_str = "年干{}、月干{}、日支{}、时干{}".format(*shi_shen_list)
+        # ---------- 十神 ----------
+        try:
+            shi_shen_list = ba_zi.getShiShen()   # 某些版本可能存在此方法
+        except AttributeError:
+            shi_shen_list = []
+        # 确保至少有4个元素
+        while len(shi_shen_list) < 4:
+            shi_shen_list.append("未知")
+        shi_shen_str = "年干{}、月干{}、日支{}、时干{}".format(*shi_shen_list[:4])
 
-    # 月令（月支）五行 —— 用于辅助判断身强身弱
-    month_zhu = ba_zi.getMonthZhu()       # 如 "丙寅"
-    month_zhi = month_zhu[-1]             # 地支
-    # 地支五行映射
-    di_zhi_wuxing = {
-        '子': '水', '丑': '土', '寅': '木', '卯': '木',
-        '辰': '土', '巳': '火', '午': '火', '未': '土',
-        '申': '金', '酉': '金', '戌': '土', '亥': '水'
-    }
-    month_wuxing = di_zhi_wuxing.get(month_zhi, '未知')
+        # ---------- 月令五行 ----------
+        month_ganzhi = lunar.getMonthInGanZhi()
+        month_zhi = month_ganzhi[-1] if month_ganzhi and len(month_ganzhi) >= 2 else "子"
+        di_zhi_wuxing = {
+            '子': '水', '丑': '土', '寅': '木', '卯': '木',
+            '辰': '土', '巳': '火', '午': '火', '未': '土',
+            '申': '金', '酉': '金', '戌': '土', '亥': '水'
+        }
+        month_wuxing = di_zhi_wuxing.get(month_zhi, "未知")
 
-    # 大运（基于当前系统时间）
-    da_yun_list = lunar.getDaYun()  # 返回 DaYun 对象列表
-    now = datetime.datetime.now()
-    current_year = now.year
-    current_da_yun = None
-    for dy in da_yun_list:
-        if dy.getStartYear() <= current_year <= dy.getEndYear():
-            current_da_yun = dy
-            break
-    if current_da_yun:
-        da_yun_ganzhi = current_da_yun.getGanZhi()
-        da_yun_nayin = current_da_yun.getNaYin()
-    else:
-        da_yun_ganzhi = "未知"
-        da_yun_nayin = "未知"
+        # ---------- 大运 ----------
+        try:
+            da_yun_list = lunar.getDaYun()
+        except AttributeError:
+            da_yun_list = []
+        now = datetime.datetime.now()
+        current_year = now.year
+        current_da_yun = None
+        for dy in da_yun_list:
+            if hasattr(dy, 'getStartYear') and hasattr(dy, 'getEndYear'):
+                if dy.getStartYear() <= current_year <= dy.getEndYear():
+                    current_da_yun = dy
+                    break
+        if current_da_yun:
+            da_yun_ganzhi = current_da_yun.getGanZhi() if hasattr(current_da_yun, 'getGanZhi') else "未知"
+            da_yun_nayin = current_da_yun.getNaYin() if hasattr(current_da_yun, 'getNaYin') else "未知"
+        else:
+            da_yun_ganzhi = "未知"
+            da_yun_nayin = "未知"
 
-    # 流年（当前年份的农历年干支）
-    solar_now = Solar.fromDate(now)
-    lunar_now = solar_now.getLunar()
-    liu_nian_ganzhi = lunar_now.getYearInGanZhi()
+        # ---------- 流年 ----------
+        solar_now = Solar.fromDate(now)
+        lunar_now = solar_now.getLunar()
+        liu_nian_ganzhi = lunar_now.getYearInGanZhi() or "未知"
 
-    # 神煞（提取桃花、天乙贵人）
-    shen_sha = ba_zi.getShenSha()       # 字典，如 {'桃花': '午', '天乙贵人': '酉'}
-    tao_hua = shen_sha.get('桃花', '无')
-    tian_yi = shen_sha.get('天乙贵人', '无')
+        # ---------- 神煞 ----------
+        try:
+            shen_sha = ba_zi.getShenSha() or {}
+        except AttributeError:
+            shen_sha = {}
+        tao_hua = shen_sha.get('桃花', '无')
+        tian_yi = shen_sha.get('天乙贵人', '无')
 
-    return {
-        "day_zhu": day_zhu,
-        "day_wuxing": day_wuxing,
-        "shi_shen_str": shi_shen_str,
-        "month_wuxing": month_wuxing,
-        "da_yun_ganzhi": da_yun_ganzhi,
-        "da_yun_nayin": da_yun_nayin,
-        "liu_nian_ganzhi": liu_nian_ganzhi,
-        "tao_hua": tao_hua,
-        "tian_yi": tian_yi,
-    }
+        return {
+            "day_zhu": day_zhu,
+            "day_wuxing": day_wuxing,
+            "shi_shen_str": shi_shen_str,
+            "month_wuxing": month_wuxing,
+            "da_yun_ganzhi": da_yun_ganzhi,
+            "da_yun_nayin": da_yun_nayin,
+            "liu_nian_ganzhi": liu_nian_ganzhi,
+            "tao_hua": tao_hua,
+            "tian_yi": tian_yi,
+        }
+    except Exception:
+        # 任何意外错误返回默认值
+        return {
+            "day_zhu": "未知", "day_wuxing": "未知", "shi_shen_str": "未知",
+            "month_wuxing": "未知", "da_yun_ganzhi": "未知", "da_yun_nayin": "未知",
+            "liu_nian_ganzhi": "未知", "tao_hua": "未知", "tian_yi": "未知"
+        }
 
 def get_beijing_time():
     utc_now = datetime.datetime.utcnow()
@@ -292,8 +321,20 @@ with tab2:
         st.error("⚠️ 日期错误：不存在该日期。")
 
     if is_date_valid and t is not None:
-        user_bazi, user_solar_str, solar_bazi_obj = calculate_bazi(sel_year, sel_month, sel_day, t.hour, t.minute)
-        st.success(f"📜 命主八字：**{user_bazi}**")
+    user_bazi, user_solar_str, solar_bazi_obj = calculate_bazi(sel_year, sel_month, sel_day, t.hour, t.minute)
+    st.success(f"📜 命主八字：**{user_bazi}**")
+    # 缓存
+    st.session_state['solar_bazi'] = solar_bazi_obj
+    st.session_state['user_bazi'] = user_bazi
+    st.session_state['user_solar_str'] = user_solar_str
+    st.session_state['birth_place'] = birth_place
+else:
+    # 清除缓存
+    st.session_state.pop('solar_bazi', None)
+    st.session_state.pop('user_bazi', None)
+    st.session_state.pop('user_solar_str', None)
+    st.session_state.pop('birth_place', None)
+        
 
 # --- 按钮区域 ---
 st.markdown("<br>", unsafe_allow_html=True)
@@ -378,29 +419,30 @@ if start_divination:
     # 但我们需要传递 solar_bazi_obj 给 get_bazi_detail，所以需要保存该对象
     # 我们在 tab2 中已经计算过 solar_bazi_obj，但它是局部变量，这里需要重新获取
     # 最简单：在此处重新计算一次，因为变量已经存在
-    if is_date_valid and t is not None:
-        # 重新获取 solar 对象
-        solar_bazi = Solar.fromYmdHms(sel_year, sel_month, sel_day, t.hour, t.minute, 0)
-        detail = get_bazi_detail(solar_bazi)
-        bazi_prompt_part = f"""
+    # 从 session_state 获取缓存的 solar 对象（如果有）
+cached_solar = st.session_state.get('solar_bazi')
+if cached_solar is not None:
+    detail = get_bazi_detail(cached_solar)
+    # 使用 detail 构建 bazi_prompt_part
+    bazi_prompt_part = f"""
 【命主先天命局 · 本地硬数据】（以下数据由历法库直接计算，无需 AI 重新推算）
-- 公历出生时间：{user_solar_str}
-- 八字排盘：{user_bazi}
+- 公历出生时间：{st.session_state.get('user_solar_str', '')}
+- 八字排盘：{st.session_state.get('user_bazi', '')}
 - 日主天干：{detail['day_zhu']}（五行属 {detail['day_wuxing']}）
 - 月令五行：{detail['month_wuxing']}（月令对日主影响重大）
 - 十神分布：{detail['shi_shen_str']}
 - 当前大运：{detail['da_yun_ganzhi']}（纳音 {detail['da_yun_nayin']}）
 - 流年干支：{detail['liu_nian_ganzhi']}
 - 桃花位：{detail['tao_hua']}  天乙贵人：{detail['tian_yi']}
-- 出生地点：{birth_place if birth_place else "未提供"}
+- 出生地点：{st.session_state.get('birth_place', '未提供')}
 
 【命理校验指令】：
 1. 请根据以上硬数据，先自行判断日主强弱（可结合月令、得地、得势）。
 2. 推演出喜用神与忌神。
 3. 在后续“命卦合参”时，若体卦五行与喜用神一致，则断为“天命加持，吉上加吉”；若体卦五行与忌神一致，则纵使卦象生体，亦需警惕“虚花之象”。
 """
-    else:
-        bazi_prompt_part = "【命主信息】：用户未提供详细生辰，请仅根据梅花易数卦象法则进行推演。"
+else:
+    bazi_prompt_part = "【命主信息】：用户未提供详细生辰，请仅根据梅花易数卦象法则进行推演。"
 
     # ================= AI 解读 =================
     prompt = f"""
