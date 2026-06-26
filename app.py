@@ -406,13 +406,15 @@ if start_divination:
         st.markdown(
             f"<div class='gua-title'>本卦<br><span style='font-size:0.7em;color:#7f8c8d'>{ben_shang['name']}{ben_xia['name']}</span></div>",
             unsafe_allow_html=True)
-        for i in range(5, -1, -1): st.markdown(draw_yao_html(ben_yao_list[i] == 1, i == idx), unsafe_allow_html=True)
+        for i in range(5, -1, -1):
+            st.markdown(draw_yao_html(ben_yao_list[i] == 1, i == idx), unsafe_allow_html=True)
     with g2:
         st.markdown(
             f"<div class='gua-title'>互卦<br><span style='font-size:0.7em;color:#7f8c8d'>{hu_shang['name']}{hu_xia['name']}</span></div>",
             unsafe_allow_html=True)
         hu_full = hu_xia["binary"] + hu_shang["binary"]
-        for i in range(5, -1, -1): st.markdown(draw_yao_html(hu_full[i] == 1, False), unsafe_allow_html=True)
+        for i in range(5, -1, -1):
+            st.markdown(draw_yao_html(hu_full[i] == 1, False), unsafe_allow_html=True)
     with g3:
         st.markdown("<div style='text-align:center;font-size:2.5em;padding-top:40px;color:#bdc3c7;'>➜</div>",
                     unsafe_allow_html=True)
@@ -420,7 +422,8 @@ if start_divination:
         st.markdown(
             f"<div class='gua-title'>变卦<br><span style='font-size:0.7em;color:#7f8c8d'>{bian_shang['name']}{bian_xia['name']}</span></div>",
             unsafe_allow_html=True)
-        for i in range(5, -1, -1): st.markdown(draw_yao_html(bian_yao_list[i] == 1, i == idx), unsafe_allow_html=True)
+        for i in range(5, -1, -1):
+            st.markdown(draw_yao_html(bian_yao_list[i] == 1, i == idx), unsafe_allow_html=True)
 
     st.markdown(f"""
     <div class='info-box'>
@@ -431,16 +434,12 @@ if start_divination:
     """, unsafe_allow_html=True)
 
     # ================= 构建命主信息（增强版） =================
-    # 原代码中 user_bazi, user_solar_str 已在 tab2 中赋值（若有效）
-    # 但我们需要传递 solar_bazi_obj 给 get_bazi_detail，所以需要保存该对象
-    # 我们在 tab2 中已经计算过 solar_bazi_obj，但它是局部变量，这里需要重新获取
-    # 最简单：在此处重新计算一次，因为变量已经存在
     # 从 session_state 获取缓存的 solar 对象（如果有）
-cached_solar = st.session_state.get('solar_bazi')
-if cached_solar is not None:
-    detail = get_bazi_detail(cached_solar)
-    # 使用 detail 构建 bazi_prompt_part
-    bazi_prompt_part = f"""
+    cached_solar = st.session_state.get('solar_bazi')
+    if cached_solar is not None:
+        detail = get_bazi_detail(cached_solar)
+        # 使用 detail 构建 bazi_prompt_part
+        bazi_prompt_part = f"""
 【命主先天命局 · 本地硬数据】（以下数据由历法库直接计算，无需 AI 重新推算）
 - 公历出生时间：{st.session_state.get('user_solar_str', '')}
 - 八字排盘：{st.session_state.get('user_bazi', '')}
@@ -455,10 +454,13 @@ if cached_solar is not None:
 【命理校验指令】：
 1. 请根据以上硬数据，先自行判断日主强弱（可结合月令、得地、得势）。
 2. 推演出喜用神与忌神。
-3. 在后续“命卦合参”时，若体卦五行与喜用神一致，则断为“天命加持，吉上加吉”；若体卦五行与忌神一致，则纵使卦象生体，亦需警惕“虚花之象”。
+3. 在后续"命卦合参"时，若体卦五行与喜用神一致，则断为"天命加持，吉上加吉"；若体卦五行与忌神一致，则纵使卦象生体，亦需警惕"虚花之象"。
 """
-else:
-    bazi_prompt_part = "【命主信息】：用户未提供详细生辰，请仅根据梅花易数卦象法则进行推演。"
+    else:
+        bazi_prompt_part = "【命主信息】：用户未提供详细生辰，请仅根据梅花易数卦象法则进行推演。"
+
+    # ================= AI 解读 =================
+    # ... 后续代码保持不变
 
     # ================= AI 解读 =================
     prompt = f"""
