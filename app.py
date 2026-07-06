@@ -580,7 +580,7 @@ if start_divination:
 
     try:
         client = OpenAI(api_key=api_key, base_url=base_url)
-        with st.spinner("🧘‍♂️ 宗师正在推演命局与卦象..."):
+        with st.spinner("🧘‍♂️正在推演..."):
             stream = client.chat.completions.create(
                 model=model_name,
                 messages=[
@@ -593,7 +593,7 @@ if start_divination:
                 top_p=0.8,
                 extra_body={
                     'enable_thinking': True,
-                    'thinking_budget': 8192
+                    'thinking_budget': 32768
                 }
             )
             for chunk in stream:
