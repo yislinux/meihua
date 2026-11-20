@@ -221,7 +221,7 @@ def get_bazi_detail(solar):
         }
 
 def get_beijing_time():
-    utc_now = datetime.datetime.utcnow()
+    utc_now = datetime.datetime.now(datetime.UTC)
     return utc_now + datetime.timedelta(hours=8)
 
 def get_time_gua_numbers(date_obj, time_obj):
