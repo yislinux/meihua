@@ -593,7 +593,7 @@ if start_divination:
                 top_p=0.8,
                 extra_body={
                     'enable_thinking': True,
-                    'thinking_budget': 32768
+                    'thinking_budget': 8192
                 }
             )
             for chunk in stream:
