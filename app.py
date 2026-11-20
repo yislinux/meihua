@@ -109,7 +109,7 @@ def get_api_client():
     """获取阿里云百炼 (DashScope) API配置"""
     api_key = None
     # 阿里云 DashScope 的兼容 OpenAI 接口地址
-    base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    base_url = "https://llm-wduj8beb63va1bus.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
 
     if "DASHSCOPE_API_KEY" in st.secrets:
         api_key = st.secrets["DASHSCOPE_API_KEY"]
